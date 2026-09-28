@@ -6,8 +6,9 @@
 
 ## 🔗 플레이하기
 
-**(배포 후 채워짐)** — GitHub Pages, `docs/index.html`을 서빙. `web/index.html`을 수정한 뒤
-`docs/index.html`에도 복사하고 커밋·푸시해야 배포본에 반영된다.
+**https://mklee-hash.github.io/kimetsu-mazes/** — Claude 계정/링크 없이 누구나 바로 접속 가능
+(GitHub Pages, `docs/index.html`을 서빙. `web/index.html`을 수정한 뒤 `docs/index.html`에도
+복사하고 커밋·푸시해야 배포본에 반영된다).
 
 ## 게임 방식
 
