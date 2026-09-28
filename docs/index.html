@@ -675,11 +675,17 @@
       ctx.rotate(-p.facing);
     }
     if (now < p.iframeUntil && Math.floor(now / 90) % 2 === 0) ctx.globalAlpha = 0.4;
+    // A bright warm-white/gold halo behind the body so the player reads
+    // clearly against every stage's dark background -- the body color
+    // alone (a jade green) used to be identical to stage 1's own accent
+    // and wall-border color, which made the player invisible there.
+    ctx.beginPath(); ctx.arc(0, 0, p.r + 5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,238,180,.35)"; ctx.fill();
     ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = "#2fa66f"; ctx.fill();
-    ctx.strokeStyle = "#173a24"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ffe9a8"; ctx.fill();
+    ctx.strokeStyle = "#5a4315"; ctx.lineWidth = 2.5; ctx.stroke();
     ctx.rotate(p.facing);
-    ctx.strokeStyle = "#e9fff2"; ctx.lineWidth = 3;
+    ctx.strokeStyle = "#3a2d0d"; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(p.r + 10, 0); ctx.stroke();
     ctx.restore();
   }
