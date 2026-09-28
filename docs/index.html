@@ -1,0 +1,1009 @@
+<title>오니 사냥꾼</title>
+<meta name="description" content="귀살대원이 되어 방을 돌아다니며 오니와 실시간으로 맞서 싸우는 액션 브라우저 게임. 방향키/드래그로 움직이고 스페이스바(또는 버튼)로 벤다.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gothic+A1:wght@400;500;700;800&family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /*
+    오니 사냥꾼 -- high-contrast dark UI in a Demon-Slayer-adjacent palette:
+    deep forest green (Tanjiro's haori), warm pink-red (Nezuko), wisteria
+    purple (Shinobu) and sun-gold (the one thing every Oni fears) accents.
+  */
+  :root {
+    --bg: #0c100d;
+    --panel: #171d18;
+    --panel-2: #212a22;
+    --edge: #3f4f3f;
+    --ink: #f4f6f1;
+    --muted: #a6b3a2;
+    --red: #ef4d6b;
+    --red-deep: #7a1030;
+    --red-glow: #ff6f8f;
+    --cyan: #2fa66f;
+    --magenta: #b48ce0;
+    --amber: #ffc233;
+    --good: #6fe0a0;
+    --font-display: 'Do Hyeon', sans-serif;
+    --font-ui: 'Gothic A1', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Gothic A1', monospace;
+    --font-body: 'Noto Sans KR', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 16px; }
+  @media (pointer: coarse) { html { font-size: 20px; } }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 16px;
+    margin: 0; padding: 24px 16px 48px; min-height: 100vh; position: relative; overflow-x: hidden;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 2px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  body::after {
+    content: ""; position: fixed; inset: -10%; pointer-events: none; z-index: 4;
+    background: radial-gradient(ellipse at 50% 0%, rgba(239, 77, 107, 0.12), transparent 60%);
+    animation: pulse-glow 7s ease-in-out infinite;
+  }
+  @keyframes pulse-glow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { body::after { animation: none; } }
+  .app { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+  #splash {
+    position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: var(--bg); text-align: center;
+    transition: opacity .6s ease, transform .6s ease; cursor: pointer;
+  }
+  #splash.hide { opacity: 0; transform: scale(1.08); pointer-events: none; }
+  #splash h1 {
+    font-family: var(--font-display); font-size: clamp(2.8rem, 12vw, 5rem); letter-spacing: 0.05em;
+    color: var(--ink); text-shadow: 0 0 26px rgba(180, 140, 224, 0.55), 0 0 3px var(--red-glow);
+    margin: 0; text-wrap: balance;
+  }
+  #splash .sub { display: block; font-family: var(--font-mono); font-size: 1.1rem; letter-spacing: 0.28em; color: var(--cyan); margin-top: 10px; }
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    font-family: var(--font-ui); font-size: 1.15rem; color: var(--ink); cursor: pointer;
+  }
+  .setting-row input[type="checkbox"] { width: 1.6em; height: 1.6em; accent-color: var(--cyan); cursor: pointer; }
+  .stage-intro-title { font-family: var(--font-display); font-size: clamp(1.6rem, 6vw, 2.1rem); color: var(--ink); margin: 8px 0 14px; }
+  /* GitHub Pages serves this file standalone (no artifact wrapper stylesheet),
+     so [hidden] needs its own !important rule -- otherwise .screen's
+     display:flex ties with the browser default [hidden]{display:none} on
+     specificity and wins by source order, leaving every "hidden" screen
+     visibly stacked in the page instead of actually hidden. */
+  [hidden] { display: none !important; }
+  .screen {
+    display: flex; flex-direction: column; gap: 18px;
+    opacity: 0; transform: translateY(10px); transition: opacity .3s ease, transform .3s ease;
+  }
+  .screen.screen-in { opacity: 1; transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .screen { transition: none; transform: none; } }
+  .screen-header { display: flex; align-items: center; gap: 14px; }
+  .screen-header .screen-icon {
+    width: 52px; height: 52px; border-radius: 14px; flex: none;
+    display: flex; align-items: center; justify-content: center; font-size: 1.7rem;
+    background: linear-gradient(160deg, var(--panel-2), var(--panel)); border: 1.5px solid var(--edge);
+  }
+  .screen-header h2 { font-family: var(--font-display); font-size: clamp(1.5rem, 6vw, 2rem); margin: 0; color: var(--ink); }
+  .menu-hero {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    gap: 10px; padding: 28px 16px 22px; position: relative;
+  }
+  .menu-hero::after {
+    content: ""; position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+    width: 72px; height: 3px; background: linear-gradient(90deg, transparent, var(--red), transparent);
+    border-radius: 2px;
+  }
+  .menu-hero h1 {
+    font-family: var(--font-display); margin: 0; letter-spacing: 0.04em;
+    font-size: clamp(2.4rem, 11vw, 3.4rem); color: var(--red);
+    text-shadow: 0 0 18px var(--red-glow), 0 0 46px rgba(239,77,107,0.35);
+  }
+  .menu-hero-sub {
+    font-family: var(--font-mono); font-size: clamp(0.7rem, 3vw, 0.85rem);
+    letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase;
+  }
+  .menu-hero .flavor { margin: 6px 0 0; max-width: 34ch; }
+  .panel {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--edge); border-radius: 4px; padding: 22px;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+    position: relative;
+  }
+  .panel::before {
+    content: ""; position: absolute; inset: 6px; border: 1px solid rgba(236,228,211,0.06);
+    border-radius: 2px; pointer-events: none;
+  }
+  .flavor { font-family: var(--font-body); font-size: 1.3rem; line-height: 1.6; color: var(--ink); margin: 0 0 10px; }
+  .lede { font-family: var(--font-body); font-size: 1.35rem; line-height: 1.85; color: var(--muted); text-align: center; max-width: 54ch; margin: 0 auto; }
+  button {
+    font-family: var(--font-ui); font-weight: 700; font-size: clamp(1.25rem, 5vw, 1.55rem); cursor: pointer; border-radius: 5px;
+    border: 2px solid rgba(47,166,111,.4); background: var(--panel-2); color: var(--ink); padding: 20px 22px; min-height: 68px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -2px 0 rgba(0,0,0,0.2);
+    transition: border-color .15s, transform .1s, background .15s;
+  }
+  button:hover { border-color: var(--cyan); background: #263129; }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  button.selected { border-color: var(--amber); background: rgba(255,194,51,.2); box-shadow: 0 0 0 2px var(--amber); }
+  .btn-primary { background: var(--red-deep); border-color: var(--red); color: #fff2f4; font-family: var(--font-display); letter-spacing: .02em; font-weight: 400; font-size: clamp(1.4rem, 5.6vw, 1.7rem); }
+  .btn-primary:hover { background: var(--red); }
+  .center { display: flex; justify-content: center; }
+  .action-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .kbd { font-family: var(--font-mono); font-size: 1rem; opacity: .75; }
+  .char-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 560px) { .char-grid { grid-template-columns: 1fr 1fr; } }
+  .char-card { text-align: left; display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-height: 64px; }
+  .char-card .char-name { font-family: var(--font-display); font-size: 1.7rem; }
+  .char-card .char-hp { font-family: var(--font-mono); color: var(--red-glow); font-size: 1.2rem; }
+  .char-card .char-desc { font-family: var(--font-body); font-size: 1.2rem; color: var(--muted); line-height: 1.55; }
+  .game-stage { position: relative; width: 100%; height: min(66vh,580px); min-height: 380px; border-radius: 12px; overflow: hidden; border: 1px solid var(--edge); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.5); touch-action: none; }
+  #scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .hud-status { position: absolute; top: 0; left: 0; right: 0; z-index: 2; padding: 12px 14px 20px; background: linear-gradient(to bottom, rgba(10,8,14,.82), transparent); font-family: var(--font-mono); display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 16px; }
+  .status-left { display: flex; flex-direction: column; gap: 2px; }
+  .status-left .char { color: var(--cyan); font-size: 1.3rem; font-family: var(--font-ui); font-weight: 600; }
+  .status-left .stage { font-size: 1.45rem; font-family: var(--font-ui); font-weight: 700; }
+  .hearts { font-size: 2.4rem; letter-spacing: 3px; }
+  .heart-full { color: var(--red-glow); text-shadow: 0 0 10px rgba(255,111,143,.8); }
+  .heart-empty { color: #3a2e2c; }
+  .enemy-count { font-family: var(--font-mono); font-size: 1.35rem; font-weight: 700; background: rgba(255,194,51,.18); border: 1.5px solid rgba(255,194,51,.5); color: var(--amber); border-radius: 999px; padding: 8px 18px; }
+  .buff-chips { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; order: 3; }
+  .chip { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 700; background: rgba(180,140,224,.18); border: 1.5px solid rgba(180,140,224,.5); color: var(--magenta); border-radius: 999px; padding: 6px 14px; }
+  .dpad { position: absolute; left: 8px; bottom: 8px; z-index: 3; display: grid; grid-template-columns: repeat(3, clamp(56px, 17vw, 80px)); grid-template-rows: repeat(2, clamp(56px, 17vw, 80px)); gap: 6px; }
+  .dpad-btn { padding: 0; font-size: clamp(1.6rem, 6vw, 2.3rem); line-height: 1; background: rgba(10,8,13,.72); border-color: rgba(47,166,111,.55); backdrop-filter: blur(2px); min-height: 0; }
+  .attack-btn {
+    position: absolute; right: 8px; bottom: 8px; z-index: 3;
+    width: clamp(72px, 22vw, 100px); height: clamp(72px, 22vw, 100px); border-radius: 50%;
+    font-family: var(--font-display); font-size: clamp(1.05rem, 4.6vw, 1.3rem); line-height: 1.15; text-align: center;
+    background: radial-gradient(circle at 35% 30%, #ffe6a0, var(--amber) 70%);
+    color: #2a1a06; border: 3px solid #fff2d6; min-height: 0; padding: 4px;
+    box-shadow: 0 0 0 0 rgba(255,194,51,.6), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .attack-btn:hover { background: radial-gradient(circle at 35% 30%, #fff0c0, var(--amber) 70%); }
+  .attack-btn:active { transform: translateY(1px) scale(.96); }
+  .dpad-up { grid-column: 2; grid-row: 1; }
+  .dpad-left { grid-column: 1; grid-row: 2; }
+  .dpad-right { grid-column: 3; grid-row: 2; }
+  .dpad-down { grid-column: 2; grid-row: 2; }
+  .toast { position: absolute; top: 84px; left: 50%; transform: translateX(-50%) translateY(-6px); z-index: 3; background: rgba(14,12,18,.92); border: 1.5px solid rgba(47,166,111,.4); border-radius: 10px; padding: 12px 20px; font-family: var(--font-body); font-size: 1.25rem; color: var(--ink); opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; max-width: 88%; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .action-panel { min-height: 60px; display: flex; flex-direction: column; justify-content: center; }
+  .action-panel:empty { display: none; }
+  .hint-line { font-family: var(--font-ui); font-size: 1.15rem; color: var(--muted); margin: 0 0 8px; text-align: center; }
+  .result-message { font-family: var(--font-body); font-size: 1.35rem; line-height: 1.55; margin: 0 0 16px; }
+  .badge { display: inline-block; font-family: var(--font-mono); font-size: .95rem; letter-spacing: .08em; padding: 5px 14px; border-radius: 999px; margin-bottom: 10px; }
+  .badge-success { background: rgba(111,224,160,.18); color: var(--good); border: 1px solid rgba(111,224,160,.4); }
+  .badge-fail { background: rgba(239,77,107,.18); color: var(--red-glow); border: 1px solid rgba(239,77,107,.4); }
+  .stage-clear, .game-over, .season-clear { text-align: center; }
+  .stage-clear h2, .game-over h2, .season-clear h2 { font-family: var(--font-display); font-size: 2.1rem; margin: 10px 0 6px; }
+  .stage-clear h2 { color: var(--cyan); }
+  .game-over h2 { color: var(--red-glow); }
+  .season-clear h2 { color: var(--amber); }
+  .recap-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; font-family: var(--font-mono); font-size: 1.1rem; color: var(--muted); margin: 8px 0 14px; }
+  .recap-stats span { text-align: center; line-height: 1.7; }
+  .recap-stats b { color: var(--ink); font-size: 1.4rem; }
+  .footnote { text-align: center; font-family: var(--font-mono); font-size: .85rem; color: var(--muted); letter-spacing: .03em; }
+</style>
+<div class="app">
+  <main id="screen-menu" class="screen" hidden>
+    <div class="menu-hero">
+      <h1>오니 사냥꾼</h1>
+      <span class="menu-hero-sub">귀살대 액션 · ONI HUNTER</span>
+      <p class="flavor">달빛도 닿지 않는 방 안, 오니가 도사린다. 살아서 가족 곁으로 돌아가야 한다.</p>
+    </div>
+    <div class="action-grid">
+      <button class="btn-primary" data-action="goto-select">새 게임</button>
+      <button data-action="continue-save" id="menu-continue-btn" hidden>이어하기</button>
+      <button data-action="goto-char-info">캐릭터 정보</button>
+      <button data-action="goto-instructions">게임 설명</button>
+      <button data-action="goto-settings">설정</button>
+    </div>
+  </main>
+
+  <main id="screen-instructions" class="screen" hidden>
+    <div class="screen-header"><span class="screen-icon">📖</span><h2>게임 설명</h2></div>
+    <div class="panel">
+      <p class="lede" style="text-align:left">방향키(WASD/↑↓←→)나 화면 드래그, 또는 D패드로 자유롭게 움직인다.
+      <b>스페이스바</b>(모바일은 화면의 "베기" 버튼)로 바라보는 방향을 향해 칼을 휘두른다.
+      방 안의 오니를 <b>모두 쓰러뜨리면</b> 오른쪽 출구가 열리고, 그곳에 도착하면 스테이지 클리어다.
+      바닥의 아이템은 가까이 다가가면 자동으로 줍는다. 하트가 0이 되면 1부 첫 스테이지부터 다시 시작한다.</p>
+    </div>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+
+  <main id="screen-settings" class="screen" hidden>
+    <div class="screen-header"><span class="screen-icon">⚙️</span><h2>설정</h2></div>
+    <div class="panel">
+      <label class="setting-row">
+        <span>모바일에서 방향 패드(D패드) 표시</span>
+        <input type="checkbox" id="setting-dpad" checked>
+      </label>
+      <p class="hint-line" style="margin-top:10px">꺼두어도 화면을 드래그해서 계속 이동할 수 있습니다.</p>
+    </div>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+
+  <main id="screen-char-info" class="screen" hidden>
+    <div class="screen-header"><span class="screen-icon">👥</span><h2>캐릭터 정보</h2></div>
+    <p class="flavor" style="text-align:center">1부에서 고를 수 있는 귀살대원과 고유 능력입니다.</p>
+    <div class="char-grid" id="char-info-grid"></div>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+
+  <main id="screen-select" class="screen" hidden>
+    <div class="screen-header"><span class="screen-icon">🎭</span><h2>캐릭터 선택</h2></div>
+    <p class="flavor" style="text-align:center">플레이할 캐릭터를 고르세요. 캐릭터마다 실제 전투에 영향을 주는 고유 능력이 있습니다.</p>
+    <div class="char-grid" id="char-grid"></div>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+
+  <main id="screen-stage-intro" class="screen" hidden>
+    <div class="panel">
+      <span class="badge badge-success" id="stage-intro-badge"></span>
+      <h2 class="stage-intro-title" id="stage-intro-title"></h2>
+      <p class="lede" style="text-align:left" id="stage-intro-text"></p>
+    </div>
+    <div class="center"><button class="btn-primary" data-action="confirm-stage-intro">확인</button></div>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+
+  <main id="screen-game" class="screen" hidden>
+    <div class="game-stage">
+      <canvas id="scene-canvas"></canvas>
+      <div class="hud-status" id="status-bar"></div>
+      <div class="toast" id="toast"></div>
+      <div class="dpad" id="dpad">
+        <button class="dpad-btn dpad-up" data-move="up" aria-label="위로">▲</button>
+        <button class="dpad-btn dpad-left" data-move="left" aria-label="왼쪽으로">◀</button>
+        <button class="dpad-btn dpad-right" data-move="right" aria-label="오른쪽으로">▶</button>
+        <button class="dpad-btn dpad-down" data-move="down" aria-label="아래로">▼</button>
+      </div>
+      <button class="attack-btn" id="attack-btn" type="button">베기</button>
+    </div>
+    <div class="panel action-panel" id="viewport"></div>
+    <p class="footnote">이동 방향키/WASD/드래그 · 베기 Space</p>
+    <div class="center"><button data-action="goto-menu">메뉴로</button></div>
+  </main>
+</div>
+<div id="splash">
+  <h1>오니 사냥꾼</h1>
+  <span class="sub">귀살대 액션 · ONI HUNTER · 3D</span>
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // Content
+  // ---------------------------------------------------------------
+  const CHARACTERS = {
+    tanjiro: { name: "탄지로 카마도", baseHp: 3, ability: "resolve",
+               desc: "포기를 모르는 의지 -- 스테이지당 1회, 체력이 0이 되는 치명타를 견뎌내고 1로 살아남는다." },
+    nezuko:  { name: "네즈코 카마도", baseHp: 3, ability: "blood_demon_art",
+               desc: "혈귀술 폭주 -- 매 스테이지의 첫 공격이 무조건 강력한 일격이 된다." },
+    inosuke: { name: "이노스케 하시비라", baseHp: 4, ability: "wild_toughness",
+               desc: "야성의 맷집 -- 오니의 공격을 25% 확률로 완전히 무시한다." },
+    giyu:    { name: "기유 토미오카", baseHp: 3, ability: "precise_reach",
+               desc: "물의 호흡 -- 공격 사거리가 30% 길어진다." },
+    shinobu: { name: "시노부 코쵸", baseHp: 3, ability: "poison_strike",
+               desc: "독의 지식 -- 공격이 적중하면 독이 스며들어 고정 피해가 추가된다." },
+    zenitsu: { name: "젠이츠 아가츠마", baseHp: 3, ability: "thunder_speed",
+               desc: "벽력일섬 -- 공격 속도가 30% 빨라진다." },
+  };
+  const PLAYABLE = ["tanjiro", "nezuko", "inosuke", "giyu", "shinobu", "zenitsu"];
+
+  const ITEMS = {
+    onigiri:        { name: "주먹밥", icon: "🍙", effect: "heal", amount: 1 },
+    crow:           { name: "전서구", icon: "🐦", effect: "speed_buff", amount: 0.4, duration: 6000 },
+    whetstone:      { name: "숫돌", icon: "🪨", effect: "damage_buff", amount: 0.5, duration: 8000 },
+    wisteria_bomb:  { name: "등나무 꽃 폭탄", icon: "💥", effect: "aoe_blast", amount: 6 },
+    nichirin_blade: { name: "니치린도", icon: "⚔️", effect: "perm_damage", amount: 1 },
+  };
+  const ITEM_POOL = ["onigiri", "onigiri", "crow", "whetstone", "wisteria_bomb", "nichirin_blade"];
+
+  const STAGES = [
+    { id: 1, name: "최종선별 후지산", w: 640, h: 400, enemyCount: 2, itemCount: 1, tutorial: true },
+    { id: 2, name: "아사쿠사 거리", w: 680, h: 420, enemyCount: 3, itemCount: 2 },
+    { id: 3, name: "무한열차", w: 760, h: 340, enemyCount: 4, itemCount: 2 },
+    { id: 4, name: "요시와라 유곽", w: 700, h: 440, enemyCount: 5, itemCount: 2 },
+    { id: 5, name: "무한성", w: 560, h: 360, enemyCount: 1, itemCount: 1, boss: true },
+  ];
+  const MAX_STAGE = Math.max(...STAGES.map((s) => s.id));
+
+  const STAGE_INTRO = {
+    1: "최종선별이 열리는 후지산 기슭, 오니가 도사리는 곳에 발을 들였다. 이 방 안의 오니를 모두 쓰러뜨리고 출구를 찾아야 한다.",
+    2: "아사쿠사의 번화한 뒷골목. 등불과 간판이 뒤엉킨 거리 곳곳에 오니가 숨어 있다. 수가 늘어난 만큼 방심할 수 없다.",
+    3: "덜컹이는 무한열차 안, 좁은 객차 통로에서 오니가 날뛴다. 승객들의 짐칸 사이로 숨겨진 물자가 종종 눈에 띈다.",
+    4: "요시와라 유곽의 화려한 골목. 등롱 불빛 아래 오니의 기척이 한층 사나워졌다.",
+    5: "오니의 본거지, 무한성 깊은 곳. 이 방 안에서 강화된 오니의 우두머리가 최후의 결전을 기다리고 있다.",
+  };
+
+  const PLAYER_BASE = { r: 14, speed: 165, atkRange: 48, atkArcDeg: 110, atkDamage: 2, atkCooldownMs: 420, iframeMs: 700 };
+  const ENEMY_BASE = { hp: 4, r: 14, speed: 95, aggro: 230, atkRange: 38, atkDamage: 1, windupMs: 420, activeMs: 140, cooldownMs: 1000 };
+  const BOSS_BASE = { hp: 40, r: 26, speed: 80, aggro: 400, atkRange: 46, atkDamage: 1, windupMs: 380, activeMs: 160, cooldownMs: 750 };
+
+  function xmur3(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return () => {
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      return (h ^= h >>> 16) >>> 0;
+    };
+  }
+  function mulberry32(a) {
+    return () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function makeRng(seedStr) { return mulberry32(xmur3(seedStr)()); }
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function angleDiff(a, b) { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
+
+  // ---------------------------------------------------------------
+  // Stage/arena generation -- an open arena (not a maze): border walls,
+  // a few obstacle blocks, randomly scattered enemies/items, and a door
+  // on the right edge that unlocks once every enemy is defeated.
+  // ---------------------------------------------------------------
+  function rectsOverlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+  function circleRectDist(cx, cy, r) {
+    return (rect) => {
+      const nx = clamp(cx, rect.x, rect.x + rect.w), ny = clamp(cy, rect.y, rect.y + rect.h);
+      return Math.hypot(cx - nx, cy - ny);
+    };
+  }
+
+  function buildStage(stageDef, seed) {
+    const rng = makeRng(`${seed}:${stageDef.id}`);
+    const W = stageDef.w, H = stageDef.h;
+    const playerStart = { x: 56, y: H / 2 };
+    const exit = { x: W - 66, y: H / 2 - 35, w: 46, h: 70 };
+
+    const obstacles = [];
+    const obstacleCount = 2 + Math.floor(rng() * 2);
+    for (let i = 0; i < obstacleCount; i++) {
+      const w = 60 + rng() * 60, h = 40 + rng() * 50;
+      const x = 160 + rng() * Math.max(20, W - 320), y = 30 + rng() * Math.max(20, H - 60 - h);
+      const rect = { x, y, w, h };
+      if (Math.hypot(x - playerStart.x, y - playerStart.y) < 140) continue;
+      if (rectsOverlap(rect, { x: exit.x - 40, y: 0, w: 80, h: H })) continue;
+      obstacles.push(rect);
+    }
+    const blocksHere = (x, y, r, extra) => {
+      if (Math.hypot(x - playerStart.x, y - playerStart.y) < 130) return true;
+      if (Math.hypot(x - (exit.x + exit.w / 2), y - (exit.y + exit.h / 2)) < 100) return true;
+      for (const o of obstacles) if (circleRectDist(x, y, r)(o) < r + 12) return true;
+      for (const p of extra) if (Math.hypot(x - p.x, y - p.y) < 70) return true;
+      return false;
+    };
+
+    const enemies = [];
+    for (let i = 0; i < stageDef.enemyCount; i++) {
+      const base = stageDef.boss ? BOSS_BASE : ENEMY_BASE;
+      let x, y, tries = 0;
+      do {
+        x = 60 + rng() * (W - 120); y = 40 + rng() * (H - 80); tries++;
+      } while (blocksHere(x, y, base.r, enemies) && tries < 40);
+      enemies.push({
+        id: i, isBoss: !!stageDef.boss, x, y, r: base.r,
+        hp: base.hp, maxHp: base.hp, speed: base.speed, aggro: base.aggro,
+        atkRange: base.atkRange, atkDamage: base.atkDamage,
+        windupMs: base.windupMs, activeMs: base.activeMs, cooldownMs: base.cooldownMs,
+        state: "idle", stateSince: 0, hitFlashUntil: 0, dead: false,
+      });
+    }
+    const items = [];
+    for (let i = 0; i < stageDef.itemCount; i++) {
+      let x, y, tries = 0;
+      do {
+        x = 60 + rng() * (W - 120); y = 40 + rng() * (H - 80); tries++;
+      } while (blocksHere(x, y, 12, [...enemies, ...items]) && tries < 40);
+      const itemId = ITEM_POOL[Math.floor(rng() * ITEM_POOL.length)];
+      items.push({ x, y, itemId, collected: false });
+    }
+    return { w: W, h: H, obstacles, enemies, items, exit, playerStart };
+  }
+
+  // ---------------------------------------------------------------
+  // Run/live state
+  // ---------------------------------------------------------------
+  const SAVE_KEY = "kimetsu_action_save_v1";
+  const DPAD_SETTING_KEY = "kimetsu_action_dpad_v1";
+  let RUN = null; // persists across stages: character/seed/hp/inventory/progress
+  let LIVE = null; // current stage's live sim: player + enemies + items
+  let paused = true;
+
+  function character() { return CHARACTERS[RUN.characterId]; }
+  function stageDef() { return STAGES.find((s) => s.id === RUN.stageId); }
+
+  function startNewRun(characterId, seed) {
+    const c = CHARACTERS[characterId];
+    RUN = {
+      characterId, seed, stageId: 1, hp: c.baseHp, maxHp: c.baseHp,
+      permDamageBonus: 0, clearedStages: [], seasonCleared: false, gameOver: false,
+      kills: 0, hitsTaken: 0,
+    };
+    startStage(1);
+  }
+  function startStage(id) {
+    RUN.stageId = id;
+    RUN.gameOver = false;
+    const arena = buildStage(stageDef(), RUN.seed);
+    LIVE = {
+      arena,
+      player: {
+        x: arena.playerStart.x, y: arena.playerStart.y, facing: 0,
+        atkCooldownUntil: 0, iframeUntil: 0, speedBuffUntil: 0, damageBuffUntil: 0,
+        swingUntil: 0, usedBloodDemonArt: false, usedResolve: false,
+      },
+      enemiesAlive: arena.enemies.length,
+      exitOpen: arena.enemies.length === 0,
+      stageStartedAt: Date.now(),
+    };
+    paused = false;
+    saveCheckpoint();
+  }
+  function saveCheckpoint() {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        characterId: RUN.characterId, seed: RUN.seed, stageId: RUN.stageId,
+        hp: RUN.hp, maxHp: RUN.maxHp, permDamageBonus: RUN.permDamageBonus,
+        clearedStages: RUN.clearedStages,
+      }));
+    } catch (e) { /* private mode etc. */ }
+  }
+  function loadCheckpoint() { try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+  function restoreFromCheckpoint(saved) {
+    RUN = {
+      characterId: saved.characterId, seed: saved.seed, stageId: saved.stageId,
+      hp: saved.hp, maxHp: saved.maxHp, permDamageBonus: saved.permDamageBonus || 0,
+      clearedStages: saved.clearedStages || [], seasonCleared: false, gameOver: false,
+      kills: 0, hitsTaken: 0,
+    };
+    startStage(RUN.stageId);
+  }
+
+  // ---- combat ---------------------------------------------------
+  function applyDamageToEnemy(enemy, dmg) {
+    enemy.hp -= dmg;
+    enemy.hitFlashUntil = performance.now() + 120;
+    if (enemy.hp <= 0 && !enemy.dead) {
+      enemy.dead = true;
+      LIVE.enemiesAlive -= 1;
+      RUN.kills += 1;
+      showToast(enemy.isBoss ? "오니의 우두머리를 쓰러뜨렸다!" : "오니를 쓰러뜨렸다!");
+      if (LIVE.enemiesAlive <= 0) {
+        LIVE.exitOpen = true;
+        showToast("모든 오니를 처치했습니다! 출구로 이동하세요.");
+      }
+    }
+  }
+  function triggerAttack() {
+    const now = performance.now();
+    const p = LIVE.player;
+    if (now < p.atkCooldownUntil) return;
+    const ability = character().ability;
+    const isFirstAttack = !p.usedBloodDemonArt && ability === "blood_demon_art";
+    let dmg = PLAYER_BASE.atkDamage + RUN.permDamageBonus;
+    if (now < p.damageBuffUntil) dmg *= 1.5;
+    if (ability === "poison_strike") dmg += 1;
+    if (isFirstAttack) { p.usedBloodDemonArt = true; dmg = 999; showToast("혈귀술이 폭주한다!"); }
+    const range = PLAYER_BASE.atkRange * (ability === "precise_reach" ? 1.3 : 1);
+    const cooldownMs = PLAYER_BASE.atkCooldownMs * (ability === "thunder_speed" ? 0.7 : 1);
+    const arcRad = (PLAYER_BASE.atkArcDeg * Math.PI) / 180;
+    p.atkCooldownUntil = now + cooldownMs;
+    p.swingUntil = now + 180;
+    for (const enemy of LIVE.arena.enemies) {
+      if (enemy.dead) continue;
+      const dx = enemy.x - p.x, dy = enemy.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d > range + enemy.r) continue;
+      const angleTo = Math.atan2(dy, dx);
+      if (Math.abs(angleDiff(angleTo, p.facing)) > arcRad / 2) continue;
+      applyDamageToEnemy(enemy, Math.round(dmg));
+    }
+  }
+  function playerTakeHit(dmg) {
+    const p = LIVE.player;
+    const now = performance.now();
+    if (now < p.iframeUntil) return;
+    p.iframeUntil = now + PLAYER_BASE.iframeMs;
+    if (character().ability === "wild_toughness" && Math.random() < 0.25) {
+      showToast("맷집으로 공격을 튕겨냈다!");
+      return;
+    }
+    RUN.hp -= dmg;
+    RUN.hitsTaken += 1;
+    if (RUN.hp <= 0) {
+      if (character().ability === "resolve" && !p.usedResolve) {
+        p.usedResolve = true;
+        RUN.hp = 1;
+        showToast("포기를 모르는 의지로 정신을 붙잡았다!");
+      } else {
+        RUN.hp = 0;
+        RUN.gameOver = true;
+        saveCheckpoint();
+      }
+    }
+  }
+  function collectItem(item) {
+    item.collected = true;
+    const def = ITEMS[item.itemId];
+    const now = performance.now();
+    if (def.effect === "heal") { RUN.hp = Math.min(RUN.maxHp, RUN.hp + def.amount); showToast(`${def.icon} ${def.name} 획득! 체력을 회복했다.`); }
+    else if (def.effect === "speed_buff") { LIVE.player.speedBuffUntil = now + def.duration; showToast(`${def.icon} ${def.name} 획득! 잠시 빨라진다.`); }
+    else if (def.effect === "damage_buff") { LIVE.player.damageBuffUntil = now + def.duration; showToast(`${def.icon} ${def.name} 획득! 잠시 공격력이 오른다.`); }
+    else if (def.effect === "aoe_blast") {
+      for (const enemy of LIVE.arena.enemies) if (!enemy.dead) applyDamageToEnemy(enemy, def.amount);
+      showToast(`${def.icon} ${def.name} 폭발! 주변 오니에게 큰 피해를 입혔다.`);
+    } else if (def.effect === "perm_damage") { RUN.permDamageBonus += def.amount; showToast(`${def.icon} ${def.name} 획득! 공격력이 영구히 오른다.`); }
+  }
+
+  // ---- per-frame simulation --------------------------------------
+  function updateEnemy(enemy, dt, now) {
+    if (enemy.dead) return;
+    const p = LIVE.player;
+    const d = dist(enemy, p);
+    if (enemy.state === "idle" || enemy.state === "chase") {
+      if (d < enemy.aggro) {
+        if (d > enemy.atkRange) {
+          const dx = (p.x - enemy.x) / (d || 1), dy = (p.y - enemy.y) / (d || 1);
+          moveEntity(enemy, dx * enemy.speed * dt, dy * enemy.speed * dt);
+          enemy.state = "chase";
+        } else { enemy.state = "windup"; enemy.stateSince = now; }
+      }
+    } else if (enemy.state === "windup") {
+      if (now - enemy.stateSince >= enemy.windupMs) { enemy.state = "active"; enemy.stateSince = now; }
+    } else if (enemy.state === "active") {
+      if (dist(enemy, p) <= enemy.atkRange + p.r) playerTakeHit(enemy.atkDamage);
+      if (now - enemy.stateSince >= enemy.activeMs) { enemy.state = "cooldown"; enemy.stateSince = now; }
+    } else if (enemy.state === "cooldown") {
+      if (now - enemy.stateSince >= enemy.cooldownMs) enemy.state = "chase";
+    }
+  }
+  function moveEntity(ent, dx, dy) {
+    ent.x += dx; ent.y += dy;
+    ent.x = clamp(ent.x, ent.r, LIVE.arena.w - ent.r);
+    ent.y = clamp(ent.y, ent.r, LIVE.arena.h - ent.r);
+    for (const rect of LIVE.arena.obstacles) {
+      const nx = clamp(ent.x, rect.x, rect.x + rect.w), ny = clamp(ent.y, rect.y, rect.y + rect.h);
+      const ddx = ent.x - nx, ddy = ent.y - ny, dd = Math.hypot(ddx, ddy);
+      if (dd < ent.r && dd > 0.001) {
+        const push = (ent.r - dd) / dd;
+        ent.x += ddx * push; ent.y += ddy * push;
+      } else if (dd <= 0.001) {
+        ent.x += ent.r; // degenerate: nudge out
+      }
+    }
+  }
+
+  function update(dt) {
+    const now = performance.now();
+    const p = LIVE.player;
+    const mv = getMoveVector();
+    if (mv.x || mv.y) {
+      const speedMul = now < p.speedBuffUntil ? 1.4 : 1;
+      moveEntity(p, mv.x * PLAYER_BASE.speed * speedMul * dt, mv.y * PLAYER_BASE.speed * speedMul * dt);
+      p.facing = Math.atan2(mv.y, mv.x);
+    }
+    for (const item of LIVE.arena.items) {
+      if (item.collected) continue;
+      if (Math.hypot(item.x - p.x, item.y - p.y) < p.r + 12) collectItem(item);
+    }
+    for (const enemy of LIVE.arena.enemies) updateEnemy(enemy, dt, now);
+    render();
+    renderStatusBar();
+    if (RUN.gameOver) { paused = true; renderGameOver(); return; }
+    if (LIVE.exitOpen) {
+      const ex = LIVE.arena.exit;
+      if (p.x > ex.x && p.x < ex.x + ex.w && p.y > ex.y && p.y < ex.y + ex.h) { triggerStageClear(); return; }
+    }
+  }
+
+  function triggerStageClear() {
+    paused = true;
+    if (!RUN.clearedStages.includes(RUN.stageId)) RUN.clearedStages.push(RUN.stageId);
+    if (RUN.stageId >= MAX_STAGE) RUN.seasonCleared = true;
+    saveCheckpoint();
+    renderStageClear();
+  }
+
+  // ---------------------------------------------------------------
+  // Rendering (2D canvas, top-down)
+  // ---------------------------------------------------------------
+  let canvas, ctx, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  function resizeCanvas() {
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    const w = Math.max(1, parent.clientWidth), h = Math.max(1, parent.clientHeight);
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function themeFor(stageId) {
+    return stageId >= 5 ? { bg: "#160b1c", obstacle: "#3a2340", accent: "#b48ce0" }
+      : stageId >= 4 ? { bg: "#22101a", obstacle: "#4a2436", accent: "#ef4d6b" }
+      : stageId >= 3 ? { bg: "#1c1712", obstacle: "#4a3626", accent: "#ffc233" }
+      : stageId >= 2 ? { bg: "#141a1e", obstacle: "#33424a", accent: "#2fa66f" }
+      : { bg: "#101a12", obstacle: "#2e4a34", accent: "#2fa66f" };
+  }
+  function drawEnemy(enemy, now) {
+    if (enemy.dead) return;
+    const theme = themeFor(RUN.stageId);
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    if (enemy.state === "windup") {
+      const k = clamp((now - enemy.stateSince) / enemy.windupMs, 0, 1);
+      ctx.beginPath(); ctx.arc(0, 0, enemy.r + 6 + k * 8, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(239,77,107,${0.3 + k * 0.6})`; ctx.lineWidth = 3; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, enemy.r, 0, Math.PI * 2);
+    ctx.fillStyle = enemy.isBoss ? "#5a1030" : "#6e2020";
+    if (now < enemy.hitFlashUntil) ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.fillStyle = "#1a0808";
+    ctx.beginPath(); ctx.moveTo(-enemy.r * 0.5, -enemy.r * 0.7); ctx.lineTo(-enemy.r * 0.2, -enemy.r * 1.3); ctx.lineTo(0, -enemy.r * 0.6); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(enemy.r * 0.5, -enemy.r * 0.7); ctx.lineTo(enemy.r * 0.2, -enemy.r * 1.3); ctx.lineTo(0, -enemy.r * 0.6); ctx.fill();
+    ctx.fillStyle = "#ffd23f";
+    ctx.beginPath(); ctx.arc(-enemy.r * 0.35, -enemy.r * 0.1, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(enemy.r * 0.35, -enemy.r * 0.1, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (enemy.hp < enemy.maxHp) {
+      const bw = enemy.r * 2;
+      ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(enemy.x - bw / 2, enemy.y - enemy.r - 12, bw, 5);
+      ctx.fillStyle = theme.accent; ctx.fillRect(enemy.x - bw / 2, enemy.y - enemy.r - 12, bw * Math.max(0, enemy.hp / enemy.maxHp), 5);
+    }
+  }
+  function drawPlayer(now) {
+    const p = LIVE.player;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (now < p.swingUntil) {
+      const range = PLAYER_BASE.atkRange * (character().ability === "precise_reach" ? 1.3 : 1);
+      const arcRad = (PLAYER_BASE.atkArcDeg * Math.PI) / 180;
+      ctx.rotate(p.facing);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, range, -arcRad / 2, arcRad / 2); ctx.closePath();
+      ctx.fillStyle = "rgba(255,194,51,.35)"; ctx.fill();
+      ctx.rotate(-p.facing);
+    }
+    if (now < p.iframeUntil && Math.floor(now / 90) % 2 === 0) ctx.globalAlpha = 0.4;
+    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = "#2fa66f"; ctx.fill();
+    ctx.strokeStyle = "#173a24"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.rotate(p.facing);
+    ctx.strokeStyle = "#e9fff2"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(p.r + 10, 0); ctx.stroke();
+    ctx.restore();
+  }
+  function drawArena() {
+    const a = LIVE.arena, theme = themeFor(RUN.stageId), now = performance.now();
+    ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, a.w, a.h);
+    ctx.strokeStyle = "rgba(255,255,255,.06)"; ctx.lineWidth = 1;
+    for (let x = 0; x < a.w; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, a.h); ctx.stroke(); }
+    for (let y = 0; y < a.h; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(a.w, y); ctx.stroke(); }
+    ctx.strokeStyle = theme.accent; ctx.lineWidth = 4; ctx.strokeRect(2, 2, a.w - 4, a.h - 4);
+    ctx.fillStyle = theme.obstacle;
+    for (const o of a.obstacles) { ctx.fillRect(o.x, o.y, o.w, o.h); ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.strokeRect(o.x, o.y, o.w, o.h); }
+    const ex = a.exit;
+    if (LIVE.exitOpen) {
+      const pulse = 0.5 + 0.5 * Math.sin(now / 220);
+      ctx.fillStyle = `rgba(255,194,51,${0.55 + pulse * 0.3})`;
+      ctx.fillRect(ex.x, ex.y, ex.w, ex.h);
+      ctx.fillStyle = "#2a1a06"; ctx.font = "24px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🚪", ex.x + ex.w / 2, ex.y + ex.h / 2);
+    } else {
+      ctx.fillStyle = "rgba(80,80,90,.55)"; ctx.fillRect(ex.x, ex.y, ex.w, ex.h);
+      ctx.fillStyle = "#ddd"; ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🔒", ex.x + ex.w / 2, ex.y + ex.h / 2);
+    }
+    for (const item of a.items) {
+      if (item.collected) continue;
+      const bob = Math.sin(now / 260 + item.x) * 3;
+      ctx.beginPath(); ctx.arc(item.x, item.y + bob, 13, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fill();
+      ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(ITEMS[item.itemId].icon, item.x, item.y + bob);
+    }
+    for (const enemy of a.enemies) drawEnemy(enemy, now);
+    drawPlayer(now);
+  }
+  function render() {
+    if (!canvas || !LIVE) return;
+    const w = canvas.width / dpr, h = canvas.height / dpr;
+    ctx.clearRect(0, 0, w, h);
+    const scale = Math.min(w / LIVE.arena.w, h / LIVE.arena.h);
+    const offX = (w - LIVE.arena.w * scale) / 2, offY = (h - LIVE.arena.h * scale) / 2;
+    ctx.save();
+    ctx.translate(offX, offY);
+    ctx.scale(scale, scale);
+    drawArena();
+    ctx.restore();
+  }
+
+  // ---------------------------------------------------------------
+  // UI shell (screens, HUD, menus) -- same proven pattern as before
+  // ---------------------------------------------------------------
+  const screens = {
+    menu: document.getElementById("screen-menu"),
+    instructions: document.getElementById("screen-instructions"),
+    settings: document.getElementById("screen-settings"),
+    charInfo: document.getElementById("screen-char-info"),
+    select: document.getElementById("screen-select"),
+    stageIntro: document.getElementById("screen-stage-intro"),
+    game: document.getElementById("screen-game"),
+  };
+  const viewport = document.getElementById("viewport");
+  const statusBar = document.getElementById("status-bar");
+  const charGrid = document.getElementById("char-grid");
+  const charInfoGrid = document.getElementById("char-info-grid");
+  const toastEl = document.getElementById("toast");
+  const attackBtn = document.getElementById("attack-btn");
+  const dpadEl = document.getElementById("dpad");
+  let pendingStageIntroConfirm = null, toastTimer = null, scene3DReady = false;
+
+  function resetScroll() {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
+  function showScreen(name) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    resetScroll();
+    for (const k in screens) {
+      const el = screens[k];
+      if (k === name) {
+        el.hidden = false;
+        el.classList.remove("screen-in");
+        void el.offsetWidth;
+        el.classList.add("screen-in");
+      } else {
+        el.classList.remove("screen-in");
+        el.hidden = true;
+      }
+    }
+    requestAnimationFrame(resetScroll);
+  }
+  function applyDpadSetting() {
+    let show = true;
+    try { show = localStorage.getItem(DPAD_SETTING_KEY) !== "0"; } catch (e) { /* private mode etc. */ }
+    dpadEl.hidden = !show;
+    const cb = document.getElementById("setting-dpad");
+    if (cb) cb.checked = show;
+  }
+  function showStageIntro(onConfirm) {
+    document.getElementById("stage-intro-badge").textContent = `STAGE ${stageDef().id}/${MAX_STAGE}`;
+    document.getElementById("stage-intro-title").textContent = stageDef().name;
+    document.getElementById("stage-intro-text").textContent =
+      (STAGE_INTRO[stageDef().id] || "") + ` 오니 ${stageDef().enemyCount}마리를 모두 쓰러뜨리고 출구로 향하세요.`;
+    pendingStageIntroConfirm = onConfirm;
+    showScreen("stageIntro");
+  }
+  function ensureCanvas() {
+    if (!scene3DReady) {
+      canvas = document.getElementById("scene-canvas");
+      ctx = canvas.getContext("2d");
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+      scene3DReady = true;
+    } else resizeCanvas();
+  }
+  function showToast(text) {
+    toastEl.textContent = text; toastEl.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+  }
+
+  function renderCharGrid() {
+    charGrid.innerHTML = PLAYABLE.map((id) => {
+      const c = CHARACTERS[id];
+      return `<button class="panel char-card" data-action="select-character" data-char="${id}">
+        <span class="char-name">${c.name}</span><span class="char-hp">${"♥".repeat(c.baseHp)}</span><span class="char-desc">${c.desc}</span>
+      </button>`;
+    }).join("");
+  }
+  function renderCharInfoGrid() {
+    charInfoGrid.innerHTML = PLAYABLE.map((id) => {
+      const c = CHARACTERS[id];
+      return `<div class="panel char-card">
+        <span class="char-name">${c.name}</span><span class="char-hp">${"♥".repeat(c.baseHp)}</span><span class="char-desc">${c.desc}</span>
+      </div>`;
+    }).join("");
+  }
+  function renderStatusBar() {
+    const c = character(), s = stageDef();
+    const hearts = "♥".repeat(Math.max(0, RUN.hp)).split("").map(() => '<span class="heart-full">♥</span>').join("")
+      + "♡".repeat(Math.max(0, RUN.maxHp - RUN.hp)).split("").map(() => '<span class="heart-empty">♡</span>').join("");
+    const now = performance.now();
+    const buffs = [];
+    if (LIVE && now < LIVE.player.speedBuffUntil) buffs.push('<span class="chip">🐦 가속</span>');
+    if (LIVE && now < LIVE.player.damageBuffUntil) buffs.push('<span class="chip">🪨 강화</span>');
+    const alive = LIVE ? LIVE.enemiesAlive : 0;
+    const defeated = s.enemyCount - alive;
+    statusBar.innerHTML = `
+      <div class="status-left"><span class="char">${c.name}</span><span class="stage">${s.name} · ${s.id}/${MAX_STAGE}</span></div>
+      <div class="hearts">${hearts}</div>
+      <div class="enemy-count">오니 ${defeated}/${s.enemyCount} 처치</div>
+      <div class="buff-chips">${buffs.join("")}</div>
+    `;
+  }
+  function renderStageClear() {
+    const elapsed = Date.now() - LIVE.stageStartedAt;
+    const mm = String(Math.floor(elapsed / 60000)).padStart(2, "0");
+    const ss = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, "0");
+    const isFinal = RUN.seasonCleared;
+    viewport.innerHTML = `
+      <div class="stage-clear">
+        <span class="badge badge-success">STAGE ${RUN.stageId} CLEAR</span>
+        <h2>🎉 ${stageDef().name} 평정!</h2>
+        <div class="recap-stats"><span>시간<br><b>${mm}:${ss}</b></span><span>처치<br><b>${RUN.kills}</b></span><span>피격<br><b>${RUN.hitsTaken}</b></span></div>
+        <button class="btn-primary" data-action="${isFinal ? "goto-season-clear" : "next-stage"}">${isFinal ? "1부 완주 결과 보기" : "다음 스테이지로"}</button>
+      </div>`;
+  }
+  function renderSeasonClear() {
+    viewport.innerHTML = `
+      <div class="season-clear">
+        <span class="badge badge-success">1부 CLEAR</span>
+        <h2>가족을 지키겠다는 약속을 끝까지 지켜냈다!</h2>
+        <p class="result-message">${character().name}이(가) 1부의 모든 스테이지를 평정했습니다.</p>
+        <button class="btn-primary" data-action="goto-select">다른 캐릭터로 다시 플레이</button>
+      </div>`;
+  }
+  function renderGameOver() {
+    viewport.innerHTML = `
+      <div class="game-over">
+        <span class="badge badge-fail">GAME OVER</span>
+        <h2>하트를 모두 잃었습니다</h2>
+        <button class="btn-primary" data-action="restart">1부 첫 스테이지부터 다시 시작</button>
+      </div>`;
+  }
+
+  // ---- input -------------------------------------------------------
+  const flags = { up: false, down: false, left: false, right: false };
+  let joy = { active: false, sx: 0, sy: 0, dx: 0, dy: 0 };
+  function getMoveVector() {
+    if (paused) return { x: 0, y: 0 };
+    if (joy.active) {
+      const len = Math.hypot(joy.dx, joy.dy);
+      if (len < 6) return { x: 0, y: 0 };
+      const mag = Math.min(1, len / 46);
+      return { x: (joy.dx / len) * mag, y: (joy.dy / len) * mag };
+    }
+    let x = (flags.right ? 1 : 0) - (flags.left ? 1 : 0), y = (flags.down ? 1 : 0) - (flags.up ? 1 : 0);
+    const len = Math.hypot(x, y);
+    return len ? { x: x / len, y: y / len } : { x: 0, y: 0 };
+  }
+  window.addEventListener("keydown", (e) => {
+    if (screens.game.hidden) return;
+    if (e.code === "ArrowUp" || e.code === "KeyW") { e.preventDefault(); flags.up = true; }
+    else if (e.code === "ArrowDown" || e.code === "KeyS") { e.preventDefault(); flags.down = true; }
+    else if (e.code === "ArrowLeft" || e.code === "KeyA") { e.preventDefault(); flags.left = true; }
+    else if (e.code === "ArrowRight" || e.code === "KeyD") { e.preventDefault(); flags.right = true; }
+    else if (e.code === "Space") { e.preventDefault(); if (!paused) triggerAttack(); }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ArrowUp" || e.code === "KeyW") flags.up = false;
+    else if (e.code === "ArrowDown" || e.code === "KeyS") flags.down = false;
+    else if (e.code === "ArrowLeft" || e.code === "KeyA") flags.left = false;
+    else if (e.code === "ArrowRight" || e.code === "KeyD") flags.right = false;
+  });
+  dpadEl.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest("[data-move]");
+    if (!btn) return;
+    flags[btn.dataset.move] = true;
+    const up = () => { flags[btn.dataset.move] = false; };
+    btn.addEventListener("pointerup", up, { once: true });
+    btn.addEventListener("pointerleave", up, { once: true });
+    btn.addEventListener("pointercancel", up, { once: true });
+  });
+  attackBtn.addEventListener("click", () => { if (!paused) triggerAttack(); });
+  (() => {
+    const canvasEl = document.getElementById("scene-canvas");
+    canvasEl.addEventListener("pointerdown", (e) => {
+      if (paused) return;
+      joy.active = true; joy.sx = e.clientX; joy.sy = e.clientY; joy.dx = 0; joy.dy = 0;
+      canvasEl.setPointerCapture(e.pointerId);
+    });
+    canvasEl.addEventListener("pointermove", (e) => {
+      if (!joy.active) return;
+      joy.dx = e.clientX - joy.sx; joy.dy = e.clientY - joy.sy;
+    });
+    const endJoy = () => { joy.active = false; joy.dx = 0; joy.dy = 0; };
+    canvasEl.addEventListener("pointerup", endJoy);
+    canvasEl.addEventListener("pointercancel", endJoy);
+  })();
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="goto-menu"]');
+    if (!btn) return;
+    paused = true;
+    document.getElementById("menu-continue-btn").hidden = !loadCheckpoint();
+    showScreen("menu");
+  });
+  screens.menu.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    if (btn.dataset.action === "goto-select") { renderCharGrid(); showScreen("select"); }
+    else if (btn.dataset.action === "goto-instructions") { showScreen("instructions"); }
+    else if (btn.dataset.action === "goto-settings") { showScreen("settings"); }
+    else if (btn.dataset.action === "goto-char-info") { renderCharInfoGrid(); showScreen("charInfo"); }
+    else if (btn.dataset.action === "continue-save") {
+      const saved = loadCheckpoint();
+      if (saved) {
+        restoreFromCheckpoint(saved);
+        viewport.innerHTML = "";
+        showScreen("game");
+        ensureCanvas();
+        showToast(`${character().name}(으)로 ${stageDef().name}에서 이어합니다.`);
+      }
+    }
+  });
+  screens.select.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action='select-character']");
+    if (!btn) return;
+    const seed = Math.floor(Math.random() * 1e9);
+    startNewRun(btn.dataset.char, seed);
+    showStageIntro(() => {
+      viewport.innerHTML = "";
+      showScreen("game");
+      ensureCanvas();
+    });
+  });
+  screens.stageIntro.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="confirm-stage-intro"]');
+    if (!btn || !pendingStageIntroConfirm) return;
+    const run = pendingStageIntroConfirm;
+    pendingStageIntroConfirm = null;
+    run();
+  });
+  viewport.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === "next-stage") {
+      startStage(RUN.stageId + 1);
+      showStageIntro(() => { viewport.innerHTML = ""; showScreen("game"); ensureCanvas(); });
+    } else if (action === "goto-season-clear") { renderSeasonClear(); }
+    else if (action === "restart") {
+      const newSeed = Math.floor(Math.random() * 1e9);
+      startNewRun(RUN.characterId, newSeed);
+      showStageIntro(() => { viewport.innerHTML = ""; showScreen("game"); ensureCanvas(); });
+    } else if (action === "goto-select") { renderCharGrid(); showScreen("select"); }
+  });
+
+  const existingSave = loadCheckpoint();
+  if (existingSave) document.getElementById("menu-continue-btn").hidden = false;
+  applyDpadSetting();
+  document.getElementById("setting-dpad").addEventListener("change", (e) => {
+    try { localStorage.setItem(DPAD_SETTING_KEY, e.target.checked ? "1" : "0"); } catch (err) { /* private mode etc. */ }
+    applyDpadSetting();
+  });
+  showScreen("menu");
+
+  // ---- main loop -----------------------------------------------------
+  let lastTs = 0;
+  function loop(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(0.05, (ts - lastTs) / 1000);
+    lastTs = ts;
+    if (!paused && !screens.game.hidden && LIVE) update(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  const splashEl = document.getElementById("splash");
+  function dismissSplash() {
+    if (!splashEl || splashEl.classList.contains("hide")) return;
+    splashEl.classList.add("hide");
+    setTimeout(() => { splashEl.hidden = true; }, 700);
+  }
+  splashEl.addEventListener("click", dismissSplash);
+  setTimeout(dismissSplash, 1400);
+})();
+</script>
